@@ -145,7 +145,7 @@ version = "2.1"
 optional = true
 
 [dependencies.embassy-executor]
-version = "0.9"
+version = ">=0.9, <0.11"
 optional = true
 
 [dependencies.embassy-futures]
