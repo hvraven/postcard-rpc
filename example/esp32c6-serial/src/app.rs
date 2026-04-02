@@ -1,12 +1,15 @@
 //! A basic postcard-rpc compatible application
 
+use core::convert::Infallible;
+
+use embassy_executor::{SpawnError, SpawnToken, Spawner};
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use esp_hal::Async;
 use esp_hal::usb_serial_jtag::{UsbSerialJtagRx, UsbSerialJtagTx};
 use panic_rtt_target as _;
 
 use esp_hal_smartled::{SmartLedsAdapter, buffer_size};
-use postcard_rpc::server::SpawnContext;
+use postcard_rpc::server::{SpawnContext, WireSpawn};
 use postcard_rpc::server::impls::embedded_io_async_v0_6::WireStorage;
 use smart_leds::RGB8;
 
@@ -16,7 +19,7 @@ use postcard_rpc::{
         Server,
         impls::embedded_io_async_v0_6::{
             EioWireTx,
-            dispatch_impl::{WireRxBuf, WireRxImpl, WireSpawnImpl},
+            dispatch_impl::{WireRxBuf, WireRxImpl},
         },
     },
 };
@@ -56,6 +59,31 @@ pub struct TaskContext {
     pub unique_id: u64,
 }
 
+#[derive(Clone)]
+pub struct EioWireSpawn {
+    pub spawner: Spawner,
+}
+
+impl From<Spawner> for EioWireSpawn {
+    fn from(value: Spawner) -> Self {
+        Self { spawner: value }
+    }
+}
+
+impl WireSpawn for EioWireSpawn {
+    type Error = SpawnError;
+    type Info = Spawner;
+
+    fn info(&self) -> &Self::Info {
+        &self.spawner
+    }
+}
+
+pub fn spawn_fn<S>(sp: &EioWireSpawn, tok: Result<SpawnToken<S>, SpawnError>) -> Result<(), Infallible> {
+    let _ = (sp, tok);
+    Ok(())
+}
+
 // Type Aliases
 //
 // These aliases are used to keep the types from getting too out of hand.
@@ -90,7 +118,7 @@ define_dispatch! {
     // This is our TX impl, which we aliased above
     tx_impl: AppTx;
     // This is our spawn impl, which also comes from `embassy_usb_v0_4`.
-    spawn_impl: WireSpawnImpl;
+    spawn_impl: EioWireSpawn;
     // This is the context type we defined above
     context: Context;
 
