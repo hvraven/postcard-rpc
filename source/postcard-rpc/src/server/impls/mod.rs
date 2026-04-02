@@ -3,10 +3,59 @@
 //! The implementations in this module typically require feature flags to be set.
 
 #[cfg(feature = "embassy-usb-0_5-server")]
-pub mod embassy_usb_v0_5;
+/// Server implementation using `embassy-usb` 0.5.
+pub mod embassy_usb_v0_5 {
+    use embassy_sync_0_7 as embassy_sync;
+    use embassy_usb_0_5 as embassy_usb;
+    use embassy_usb_driver_0_2 as embassy_usb_driver;
 
-#[cfg(feature = "embedded-io-async-0_6-server")]
-pub mod embedded_io_async_v0_6;
+    include!("embassy_usb_v0_5.rs");
+}
+
+#[cfg(feature = "embassy-usb-0_6-server")]
+/// Server implementation using `embassy-usb` 0.6.
+pub mod embassy_usb_v0_6 {
+    use embassy_sync_0_8 as embassy_sync;
+    use embassy_usb_0_6 as embassy_usb;
+    use embassy_usb_driver_0_2 as embassy_usb_driver;
+
+    include!("embassy_usb_v0_5.rs");
+}
+
+#[cfg(all(
+    feature = "embedded-io-async-0_6-server",
+    feature = "embassy-sync-0_7",
+))]
+/// Server implementation using `embedded-io-async` 0.6 with `embassy-sync` 0.7.
+pub mod embedded_io_async_v0_6_sync_v0_7 {
+    use embassy_sync_0_7 as embassy_sync;
+
+    include!("embedded_io_async_v0_6.rs");
+}
+
+#[cfg(all(
+    feature = "embedded-io-async-0_6-server",
+    feature = "embassy-sync-0_8",
+))]
+/// Server implementation using `embedded-io-async` 0.6 with `embassy-sync` 0.8.
+pub mod embedded_io_async_v0_6_sync_v0_8 {
+    use embassy_sync_0_8 as embassy_sync;
+
+    include!("embedded_io_async_v0_6.rs");
+}
+
+#[cfg(all(
+    feature = "embedded-io-async-0_6-server",
+    feature = "embassy-sync-0_8",
+))]
+pub use embedded_io_async_v0_6_sync_v0_8 as embedded_io_async_v0_6;
+
+#[cfg(all(
+    feature = "embedded-io-async-0_6-server",
+    not(feature = "embassy-sync-0_8"),
+    feature = "embassy-sync-0_7",
+))]
+pub use embedded_io_async_v0_6_sync_v0_7 as embedded_io_async_v0_6;
 
 #[cfg(all(target_os = "linux", feature = "usb-gadget"))]
 pub mod usb_gadget;
@@ -16,6 +65,7 @@ pub mod test_channels;
 
 #[cfg(any(
     feature = "embassy-usb-0_5-server",
+    feature = "embassy-usb-0_6-server",
     feature = "embedded-io-async-0_6-server",
 ))]
 pub(crate) mod embassy_shared {
