@@ -396,7 +396,9 @@ where
 pub enum ServerError<Tx, Rx>
 where
     Tx: WireTx,
+    Tx::Error: 'static,
     Rx: WireRx,
+    Rx::Error: 'static,
 {
     /// A fatal error occurred with the [`WireTx::send()`] implementation
     #[error("A fatal error occurred while transmitting")]
@@ -409,8 +411,8 @@ where
 #[cfg(feature = "defmt")]
 impl<Tx, Rx> defmt::Format for ServerError<Tx, Rx>
 where
-    Tx: WireTx<Error: defmt::Format>,
-    Rx: WireRx<Error: defmt::Format>,
+    Tx: WireTx<Error: defmt::Format + 'static>,
+    Rx: WireRx<Error: defmt::Format + 'static>,
 {
     fn format(&self, fmt: defmt::Formatter) {
         match self {
@@ -423,7 +425,9 @@ where
 impl<Tx, Rx, Buf, D> Server<Tx, Rx, Buf, D>
 where
     Tx: WireTx,
+    Tx::Error: 'static,
     Rx: WireRx,
+    Rx::Error: 'static,
     Buf: DerefMut<Target = [u8]>,
     D: Dispatch<Tx = Tx>,
 {
