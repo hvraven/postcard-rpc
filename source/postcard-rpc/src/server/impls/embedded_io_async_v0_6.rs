@@ -1,4 +1,4 @@
-//! Implementation using `embedded-io-async`
+// Implementation using `embedded-io-async`
 use core::{fmt::Arguments, marker::PhantomData, ops::DerefMut};
 
 use crate::{
@@ -8,7 +8,7 @@ use crate::{
     Topic,
 };
 use cobs::decode;
-use embassy_sync_0_7::{blocking_mutex::raw::RawMutex, mutex::Mutex};
+use embassy_sync::{blocking_mutex::raw::RawMutex, mutex::Mutex};
 use embedded_io_async_0_6::{Read, Write};
 use postcard::{
     ser_flavors::{Flavor, Slice},

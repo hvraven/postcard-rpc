@@ -7,7 +7,7 @@ version = "0.1.0"
 critical-section = "1.2"
 defmt = "1"
 embassy-executor = { version = "0.9", features = ["defmt"] }
-embassy-sync = { version = "0.7", features = ["defmt"] }
+embassy-sync = { version = "0.8", features = ["defmt"] }
 embassy-time = "0.5"
 esp-hal = { version = "1.0.0", features = [
     "defmt",
@@ -24,7 +24,7 @@ serde = { version = "1.0", default-features = false }
 smart-leds = "0.4.0"
 
 postcard = { version = "1" }
-postcard-rpc = { version = "0.12", features = ["embedded-io-async-0_6-server"] }
+postcard-rpc = { version = "0.12", features = ["embedded-io-async-0_6-server", "embassy-sync-0_8"] }
 postcard-schema = { version = "0.2.0", features = ["derive"] }
 
 workbook-icd = { path = "../workbook-icd" }
