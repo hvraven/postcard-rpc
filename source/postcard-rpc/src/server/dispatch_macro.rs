@@ -24,11 +24,13 @@
 ///         // This is the list you get from the `endpoints()` macro
 ///         list: ENDPOINT_LIST;
 ///
-///         // These are all of your endpoints and the handlers they map to
-///         | EndpointTy        | kind      | handler               |
-///         | ----------        | ----      | -------               |
-///         | AlphaEndpoint     | async     | test_alpha_handler    |
-///         | BetaEndpoint      | spawn     | test_beta_handler     |
+///         // These are all of your endpoints and the handlers they map to. The `Cfg`
+///         // column is optional, as in `endpoints!`: a row whose `cfg` is false is not
+///         // dispatched, and its key is answered `UnknownKey`
+///         | EndpointTy        | kind      | handler               | Cfg                   |
+///         | ----------        | ----      | -------               | ---                   |
+///         | AlphaEndpoint     | async     | test_alpha_handler    |                       |
+///         | BetaEndpoint      | spawn     | test_beta_handler     | cfg(feature = "beta") |
 ///     };
 ///     topics_in: {
 ///         // This is the list you get from the `topics!()` macro
@@ -124,8 +126,8 @@ macro_rules! define_dispatch {
     (@matcher
         $n:literal $app_name:ident $tx_impl:ty; $spawn_fn:ident $key_ty:ty; $key_kind:expr;
         $req_key_name:ident / $topic_key_name:ident = $bytes_ty:ty;
-        ($($endpoint:ty | $ep_flavor:tt | $ep_handler:ident)*)
-        ($($topic_in:ty | $tp_flavor:tt | $tp_handler:ident)*)
+        ($($(#[$ep_meta:meta])? $endpoint:ty | $ep_flavor:tt | $ep_handler:ident)*)
+        ($($(#[$tp_meta:meta])? $topic_in:ty | $tp_flavor:tt | $tp_handler:ident)*)
     ) => {
         impl $app_name<$n> {
             /// Check if there are any unexpected duplicates, typically this occurs because
@@ -137,9 +139,11 @@ macro_rules! define_dispatch {
                         <$crate::standard_icd::PingEndpoint as $crate::Endpoint>::$req_key_name,
                         <$crate::standard_icd::GetAllSchemasEndpoint as $crate::Endpoint>::$req_key_name,
                         $(
+                            $(#[$ep_meta])?
                             <$endpoint as $crate::Endpoint>::$req_key_name,
                         )*
                         $(
+                            $(#[$tp_meta])?
                             <$topic_in as $crate::Topic>::$topic_key_name,
                         )*
                     ];
@@ -201,6 +205,7 @@ macro_rules! define_dispatch {
                     //
                     // end standard_icd endpoints
                     $(
+                        $(#[$ep_meta])?
                         <$endpoint as $crate::Endpoint>::$req_key_name => {
                             // Can we deserialize the request?
                             let Ok(req) = $crate::postcard::from_bytes::<<$endpoint as $crate::Endpoint>::Request>(body) else {
@@ -222,6 +227,7 @@ macro_rules! define_dispatch {
                         }
                     )*
                     $(
+                        $(#[$tp_meta])?
                         <$topic_in as $crate::Topic>::$topic_key_name => {
                             // Can we deserialize the request?
                             let Ok(msg) = $crate::postcard::from_bytes::<<$topic_in as $crate::Topic>::Message>(body) else {
@@ -266,16 +272,16 @@ macro_rules! define_dispatch {
         endpoints: {
             list: $endpoint_list:path;
 
-               | EndpointTy     | kind          | handler           |
-               | $(-)*          | $(-)*         | $(-)*             |
-            $( | $endpoint:ty   | $ep_flavor:tt | $ep_handler:ident  | )*
+               | EndpointTy     | kind          | handler           | $( Cfg           |)?
+               | $(-)*          | $(-)*         | $(-)*             | $( $(-)*         |)?
+            $( | $endpoint:ty   | $ep_flavor:tt | $ep_handler:ident | $($ep_meta:meta)? $(|)? )*
         };
         topics_in: {
             list: $topic_in_list:path;
 
-               | TopicTy        | kind          | handler           |
-               | $(-)*          | $(-)*         | $(-)*             |
-            $( | $topic_in:ty   | $tp_flavor:tt | $tp_handler:ident  | )*
+               | TopicTy        | kind          | handler           | $( Cfg           |)?
+               | $(-)*          | $(-)*         | $(-)*             | $( $(-)*         |)?
+            $( | $topic_in:ty   | $tp_flavor:tt | $tp_handler:ident | $($tp_meta:meta)? $(|)? )*
         };
         topics_out: {
             list: $topic_out_list:path;
@@ -344,13 +350,13 @@ macro_rules! define_dispatch {
             //
             // This should be a SUBSET of the REQUEST KEYS in the Endpoint report
             const EP_HANDLER_IN_KEYS: &[Key] = &[
-                $(<$endpoint as $crate::Endpoint>::REQ_KEY,)*
+                $($(#[$ep_meta])? <$endpoint as $crate::Endpoint>::REQ_KEY,)*
             ];
             // This is a list of all RESPONSE KEYS in the actual handlers
             //
             // This should be a SUBSET of the RESPONSE KEYS in the Endpoint report
             const EP_HANDLER_OUT_KEYS: &[Key] = &[
-                $(<$endpoint as $crate::Endpoint>::RESP_KEY,)*
+                $($(#[$ep_meta])? <$endpoint as $crate::Endpoint>::RESP_KEY,)*
             ];
             // This is a list of all TOPIC KEYS in the actual handlers
             //
@@ -358,7 +364,7 @@ macro_rules! define_dispatch {
             // (we can't check the out, we have no way of enumerating that yet,
             // which would require linkme-like crimes I think)
             const TP_HANDLER_IN_KEYS: &[Key] = &[
-                $(<$topic_in as $crate::Topic>::TOPIC_KEY,)*
+                $($(#[$tp_meta])? <$topic_in as $crate::Topic>::TOPIC_KEY,)*
             ];
 
             const fn a_is_subset_of_b(a: &[Key], b: &[Key]) -> bool {
@@ -485,26 +491,26 @@ macro_rules! define_dispatch {
             $crate::define_dispatch! {
                 @matcher 1 $app_name $tx_impl; $spawn_fn $crate::Key1; $crate::header::VarKeyKind::Key1;
                 REQ_KEY1 / TOPIC_KEY1 = u8;
-                ($($endpoint | $ep_flavor | $ep_handler)*)
-                ($($topic_in | $tp_flavor | $tp_handler)*)
+                ($($(#[$ep_meta])? $endpoint | $ep_flavor | $ep_handler)*)
+                ($($(#[$tp_meta])? $topic_in | $tp_flavor | $tp_handler)*)
             }
             $crate::define_dispatch! {
                 @matcher 2 $app_name $tx_impl; $spawn_fn $crate::Key2; $crate::header::VarKeyKind::Key2;
                 REQ_KEY2 / TOPIC_KEY2 = [u8; 2];
-                ($($endpoint | $ep_flavor | $ep_handler)*)
-                ($($topic_in | $tp_flavor | $tp_handler)*)
+                ($($(#[$ep_meta])? $endpoint | $ep_flavor | $ep_handler)*)
+                ($($(#[$tp_meta])? $topic_in | $tp_flavor | $tp_handler)*)
             }
             $crate::define_dispatch! {
                 @matcher 4 $app_name $tx_impl; $spawn_fn $crate::Key4; $crate::header::VarKeyKind::Key4;
                 REQ_KEY4 / TOPIC_KEY4 = [u8; 4];
-                ($($endpoint | $ep_flavor | $ep_handler)*)
-                ($($topic_in | $tp_flavor | $tp_handler)*)
+                ($($(#[$ep_meta])? $endpoint | $ep_flavor | $ep_handler)*)
+                ($($(#[$tp_meta])? $topic_in | $tp_flavor | $tp_handler)*)
             }
             $crate::define_dispatch! {
                 @matcher 8 $app_name $tx_impl; $spawn_fn $crate::Key; $crate::header::VarKeyKind::Key8;
                 REQ_KEY / TOPIC_KEY = [u8; 8];
-                ($($endpoint | $ep_flavor | $ep_handler)*)
-                ($($topic_in | $tp_flavor | $tp_handler)*)
+                ($($(#[$ep_meta])? $endpoint | $ep_flavor | $ep_handler)*)
+                ($($(#[$tp_meta])? $topic_in | $tp_flavor | $tp_handler)*)
             }
         }
 

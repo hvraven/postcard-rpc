@@ -11,7 +11,7 @@ use tokio::{sync::mpsc, task::yield_now, time::timeout};
 use postcard_rpc::{
     define_dispatch, endpoints,
     header::{VarHeader, VarKey, VarKeyKind, VarSeq, VarSeqKind},
-    host_client::{test_channels as client, HostClient},
+    host_client::{test_channels as client, HostClient, HostErr},
     server::{
         impls::test_channels::{
             dispatch_impl::{
@@ -21,6 +21,7 @@ use postcard_rpc::{
         },
         Dispatch, Sender, SpawnContext,
     },
+    standard_icd::WireError,
     topics, Endpoint, Topic,
 };
 
@@ -134,22 +135,25 @@ define_dispatch! {
     endpoints: {
         list: crate::ENDPOINT_LIST;
 
-        | EndpointTy        | kind      | handler                   |
-        | ----------        | ----      | -------                   |
-        | AlphaEndpoint     | async     | test_alpha_handler        |
-        | BetaEndpoint      | spawn     | test_beta_handler         |
-        | BorrowEndpoint1   | blocking  | test_borrowep_blocking    |
-        | BorrowEndpoint2   | blocking  | test_borrowep_blocking2   |
+        | EndpointTy        | kind      | handler                   | Cfg                    |
+        | ----------        | ----      | -------                   | ---                    |
+        | AlphaEndpoint     | async     | test_alpha_handler        |                        |
+        | BetaEndpoint      | spawn     | test_beta_handler         |                        |
+        | BorrowEndpoint1   | blocking  | test_borrowep_blocking    | cfg(feature = "alpha") |
+        | BorrowEndpoint2   | blocking  | test_borrowep_blocking2   |                        |
+        // Compiles only because the row is dropped: the handler does not exist.
+        | GammaEndpoint     | blocking  | no_such_handler           | cfg(any())             |
     };
     topics_in: {
         list: crate::TOPICS_IN_LIST;
 
-        | TopicTy           | kind      | handler               |
-        | ----------        | ----      | -------               |
-        | ZetaTopic1        | blocking  | test_zeta_blocking    |
-        | ZetaTopic2        | async     | test_zeta_async       |
-        | ZetaTopic3        | spawn     | test_zeta_spawn       |
-        | BorrowTopic       | blocking  | test_borrow_blocking  |
+        | TopicTy           | kind      | handler               | Cfg        |
+        | ----------        | ----      | -------               | ---        |
+        | ZetaTopic1        | blocking  | test_zeta_blocking    |            |
+        | ZetaTopic2        | async     | test_zeta_async       |            |
+        | ZetaTopic3        | spawn     | test_zeta_spawn       |            |
+        | BorrowTopic       | blocking  | test_borrow_blocking  |            |
+        | BerpTopic1        | blocking  | no_such_topic_handler | cfg(any()) |
     };
     topics_out: {
         list: TOPICS_OUT_LIST;
@@ -409,6 +413,13 @@ async fn end_to_end() {
     assert_eq!(resp.0, 42);
     let resp = cli.send_resp::<BetaEndpoint>(&BReq(1234)).await.unwrap();
     assert_eq!(resp.0, 1234);
+
+    // Gamma is in the endpoint list, but its dispatch row is configured out.
+    let resp = cli.send_resp::<GammaEndpoint>(&GReq).await;
+    assert!(
+        matches!(resp, Err(HostErr::Wire(WireError::UnknownKey))),
+        "a configured-out row must leave its key unhandled"
+    );
 }
 
 #[tokio::test]
