@@ -27,7 +27,7 @@ pub mod dispatch_macro;
 
 pub mod impls;
 
-use core::{fmt::Arguments, ops::DerefMut};
+use core::{fmt::Arguments, future::Future, ops::DerefMut};
 
 use crate::{
     header::{VarHeader, VarKey, VarKeyKind, VarSeq},
@@ -209,15 +209,16 @@ impl<Tx: WireTx> Sender<Tx> {
 
     /// Send a reply for the given endpoint
     #[inline]
-    pub async fn reply<E>(&self, seq_no: VarSeq, resp: &E::Response) -> Result<(), Tx::Error>
+    pub fn reply<'a, E>(
+        &'a self,
+        seq_no: VarSeq,
+        resp: &'a E::Response,
+    ) -> impl Future<Output = Result<(), Tx::Error>> + 'a
     where
         E: crate::Endpoint,
         E::Response: Serialize + Schema,
     {
-        let mut key = VarKey::Key8(E::RESP_KEY);
-        key.shrink_to(self.kkind);
-        let wh = VarHeader { key, seq_no };
-        self.tx.send::<E::Response>(wh, resp).await
+        self.send_keyed(seq_no, E::RESP_KEY, resp)
     }
 
     /// Send a reply with the given Key
@@ -225,29 +226,44 @@ impl<Tx: WireTx> Sender<Tx> {
     /// This is useful when replying with "unusual" keys, for example Error responses
     /// not tied to any specific Endpoint.
     #[inline]
-    pub async fn reply_keyed<T>(&self, seq_no: VarSeq, key: Key, resp: &T) -> Result<(), Tx::Error>
+    pub fn reply_keyed<'a, T>(
+        &'a self,
+        seq_no: VarSeq,
+        key: Key,
+        resp: &'a T,
+    ) -> impl Future<Output = Result<(), Tx::Error>> + 'a
     where
         T: ?Sized,
         T: Serialize + Schema,
     {
-        let mut key = VarKey::Key8(key);
-        key.shrink_to(self.kkind);
-        let wh = VarHeader { key, seq_no };
-        self.tx.send::<T>(wh, resp).await
+        self.send_keyed(seq_no, key, resp)
     }
 
     /// Publish a Topic message
     #[inline]
-    pub async fn publish<T>(&self, seq_no: VarSeq, msg: &T::Message) -> Result<(), Tx::Error>
+    pub fn publish<'a, T>(
+        &'a self,
+        seq_no: VarSeq,
+        msg: &'a T::Message,
+    ) -> impl Future<Output = Result<(), Tx::Error>> + 'a
     where
         T: ?Sized,
         T: crate::Topic,
         T::Message: Serialize + Schema,
     {
-        let mut key = VarKey::Key8(T::TOPIC_KEY);
+        self.send_keyed(seq_no, T::TOPIC_KEY, msg)
+    }
+
+    /// Send one message under the given key.
+    async fn send_keyed<T>(&self, seq_no: VarSeq, key: Key, msg: &T) -> Result<(), Tx::Error>
+    where
+        T: ?Sized,
+        T: Serialize,
+    {
+        let mut key = VarKey::Key8(key);
         key.shrink_to(self.kkind);
         let wh = VarHeader { key, seq_no };
-        self.tx.send::<T::Message>(wh, msg).await
+        self.tx.send::<T>(wh, msg).await
     }
 
     /// Log a `str` directly to the [`LoggingTopic`][crate::standard_icd::LoggingTopic]
