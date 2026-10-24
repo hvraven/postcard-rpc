@@ -314,6 +314,42 @@ impl<M: RawMutex + 'static, D: Driver<'static> + 'static> EUsbWireTx<M, D> {
         let mut guard = self.inner.lock().await;
         guard.timeout_ms_per_frame = timeout;
     }
+
+    /// The part of [`WireTx::send`] that does not depend on the message type.
+    async fn send_erased(
+        &self,
+        hdr: VarHeader,
+        serialize: &dyn Fn(&mut [u8]) -> postcard::Result<usize>,
+    ) -> Result<(), WireTxErrorKind> {
+        let mut inner = self.inner.lock().await;
+
+        let EUsbWireTxInner {
+            ep_in,
+            log_seq: _,
+            tx_buf,
+            pending_frame,
+            timeout_ms_per_frame,
+            max_usb_frame_size,
+        }: &mut EUsbWireTxInner<D> = &mut inner;
+
+        let (hdr_used, remain) = hdr.write_to_slice(tx_buf).ok_or(WireTxErrorKind::Other)?;
+        let hdr_len = hdr_used.len();
+        let bdy_len = serialize(remain).map_err(|_| WireTxErrorKind::Other)?;
+        let used_ttl = hdr_len + bdy_len;
+
+        if let Some(used) = tx_buf.get(..used_ttl) {
+            send_all::<D>(
+                ep_in,
+                used,
+                pending_frame,
+                *timeout_ms_per_frame,
+                *max_usb_frame_size,
+            )
+            .await
+        } else {
+            Err(WireTxErrorKind::Other)
+        }
+    }
 }
 
 impl<M: RawMutex + 'static, D: Driver<'static> + 'static> Clone for EUsbWireTx<M, D> {
@@ -335,33 +371,8 @@ impl<M: RawMutex + 'static, D: Driver<'static> + 'static> WireTx for EUsbWireTx<
         hdr: VarHeader,
         msg: &T,
     ) -> Result<(), Self::Error> {
-        let mut inner = self.inner.lock().await;
-
-        let EUsbWireTxInner {
-            ep_in,
-            log_seq: _,
-            tx_buf,
-            pending_frame,
-            timeout_ms_per_frame,
-            max_usb_frame_size,
-        }: &mut EUsbWireTxInner<D> = &mut inner;
-
-        let (hdr_used, remain) = hdr.write_to_slice(tx_buf).ok_or(WireTxErrorKind::Other)?;
-        let bdy_used = postcard::to_slice(msg, remain).map_err(|_| WireTxErrorKind::Other)?;
-        let used_ttl = hdr_used.len() + bdy_used.len();
-
-        if let Some(used) = tx_buf.get(..used_ttl) {
-            send_all::<D>(
-                ep_in,
-                used,
-                pending_frame,
-                *timeout_ms_per_frame,
-                *max_usb_frame_size,
-            )
+        self.send_erased(hdr, &|buf| Ok(postcard::to_slice(msg, buf)?.len()))
             .await
-        } else {
-            Err(WireTxErrorKind::Other)
-        }
     }
 
     async fn send_raw(&self, buf: &[u8]) -> Result<(), Self::Error> {
