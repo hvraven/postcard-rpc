@@ -629,8 +629,6 @@ mod endpoints_test {
         assert!(paths.contains(&"extend/one"));
     }
 
-    // compile only check
-    #[allow(unused)]
     endpoints! {
         list = EMPTY_IMPORT_ENDPOINTS;
         import = [];
@@ -638,9 +636,7 @@ mod endpoints_test {
         | EndpointTy     | RequestTy     | ResponseTy    | Path              |
         | ----------     | ---------     | ----------    | ----              |
     }
-    
-    // compile only check
-    #[allow(unused)]
+
     endpoints! {
         list = EMPTY_IMPORT_WITH_OMIT_STD_TRUE_ENDPOINTS;
         omit_std = true;
@@ -650,8 +646,6 @@ mod endpoints_test {
         | ----------     | ---------     | ----------    | ----              |
     }
 
-    // compile only check
-    #[allow(unused)]
     endpoints! {
         list = EMPTY_IMPORT_WITH_OMIT_STD_FALSE_ENDPOINTS;
         omit_std = false;
@@ -659,6 +653,17 @@ mod endpoints_test {
 
         | EndpointTy     | RequestTy     | ResponseTy    | Path              |
         | ----------     | ---------     | ----------    | ----              |
+    }
+
+    #[test]
+    fn empty_endpoint_import() {
+        assert!(EMPTY_IMPORT_WITH_OMIT_STD_TRUE_ENDPOINTS
+            .endpoints
+            .is_empty());
+        assert_eq!(
+            EMPTY_IMPORT_ENDPOINTS.endpoints.len(),
+            EMPTY_IMPORT_WITH_OMIT_STD_FALSE_ENDPOINTS.endpoints.len()
+        );
     }
 
     #[derive(Serialize, Deserialize, Schema)]
@@ -698,8 +703,6 @@ mod endpoints_test {
         assert!(paths.contains(&"extend/topic"));
     }
 
-    // compile only check
-    #[allow(unused)]
     topics! {
         list = EMPTY_IMPORT_TOPICS;
         direction = crate::TopicDirection::ToClient;
@@ -708,9 +711,7 @@ mod endpoints_test {
         | TopicTy        | MessageTy     | Path              |
         | ----------     | ---------     | ----              |
     }
-    
-    // compile only check
-    #[allow(unused)]
+
     topics! {
         list = EMPTY_IMPORT_WITH_OMIT_STD_TRUE_TOPICS;
         direction = crate::TopicDirection::ToClient;
@@ -721,8 +722,6 @@ mod endpoints_test {
         | ----------     | ---------     | ----              |
     }
 
-    // compile only check
-    #[allow(unused)]
     topics! {
         list = EMPTY_IMPORT_WITH_OMIT_STD_FALSE_TOPICS;
         direction = crate::TopicDirection::ToClient;
@@ -731,5 +730,14 @@ mod endpoints_test {
 
         | TopicTy        | MessageTy     | Path              |
         | ----------     | ---------     | ----              |
+    }
+
+    #[test]
+    fn empty_topic_import() {
+        assert!(EMPTY_IMPORT_WITH_OMIT_STD_TRUE_TOPICS.topics.is_empty());
+        assert_eq!(
+            EMPTY_IMPORT_TOPICS.topics.len(),
+            EMPTY_IMPORT_WITH_OMIT_STD_FALSE_TOPICS.topics.len()
+        );
     }
 }
