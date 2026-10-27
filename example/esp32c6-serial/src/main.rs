@@ -3,20 +3,15 @@
 
 use embassy_executor::Spawner;
 use esp_hal::{
-    clock::CpuClock,
-    efuse,
-    interrupt::software::SoftwareInterruptControl,
-    rmt::{PulseCode, Rmt},
-    time::Rate,
-    timer::systimer::SystemTimer,
-    usb_serial_jtag::UsbSerialJtag,
+    clock::CpuClock, efuse, rmt::Rmt, time::Rate, timer::systimer::SystemTimer,
+    usb::usb_serial_jtag::UsbSerialJtag,
 };
-use esp_hal_smartled::SmartLedsAdapter;
+use esp_hal_smartled::{RmtSmartLeds, WS2812_TIMING};
 use panic_rtt_target as _;
 use postcard_rpc::server::{Dispatch, Server};
 use static_cell::ConstStaticCell;
 
-use crate::app::{AppServer, Context, LED_BUFFER_SIZE, MyApp, STORAGE};
+use crate::app::{AppServer, Context, MyApp, STORAGE};
 
 pub mod app;
 pub mod handlers;
@@ -29,21 +24,19 @@ async fn main(spawner: Spawner) {
 
     let p = esp_hal::init(esp_hal::Config::default().with_cpu_clock(CpuClock::max()));
 
-    let sw_int = SoftwareInterruptControl::new(p.SW_INTERRUPT);
     let timer0 = SystemTimer::new(p.SYSTIMER);
 
-    esp_rtos::start(timer0.alarm0, sw_int.software_interrupt0);
+    esp_rtos::start(timer0.alarm0, p.FROM_CPU_INTR0);
 
     let (rx, tx) = UsbSerialJtag::new(p.USB_DEVICE).into_async().split();
     let (rx_impl, tx_impl) = STORAGE.init(rx, tx).unwrap();
 
-    static RMT_BUF: ConstStaticCell<[PulseCode; LED_BUFFER_SIZE]> =
-        ConstStaticCell::new([PulseCode::end_marker(); LED_BUFFER_SIZE]);
-    let rmt = Rmt::new(p.RMT, Rate::from_mhz(80)).unwrap();
+    let rmt_freq = Rate::from_mhz(80);
+    let rmt = Rmt::new(p.RMT, rmt_freq).unwrap();
 
     let context = Context {
         unique_id: get_unique_id(),
-        led: SmartLedsAdapter::new(rmt.channel0, p.GPIO8, RMT_BUF.take()),
+        led: RmtSmartLeds::new(WS2812_TIMING, rmt.channel0, p.GPIO8, rmt_freq).unwrap(),
         leds: Default::default(),
     };
 
@@ -60,6 +53,7 @@ async fn main(spawner: Spawner) {
 }
 
 fn get_unique_id() -> u64 {
-    let mac = efuse::Efuse::mac_address();
+    let mac = efuse::base_mac_address();
+    let mac = mac.as_bytes();
     u64::from_le_bytes([mac[0], mac[1], mac[2], mac[3], mac[4], mac[5], 0, 0])
 }

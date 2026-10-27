@@ -244,7 +244,7 @@ pub mod dispatch_impl {
 /// Implementation detail, holding the endpoint and scratch buffer used for sending
 pub struct EUsbWireTxInner<D: Driver<'static>> {
     ep_in: D::EndpointIn,
-    log_seq: u16,
+    log_seq: i16,
     tx_buf: &'static mut [u8],
     pending_frame: bool,
     timeout_ms_per_frame: usize,
@@ -261,7 +261,7 @@ impl<D: Driver<'static>> EUsbWireTxInner<D> {
     pub fn new(ep_in: D::EndpointIn, tx_buf: &'static mut [u8], max_usb_frame_size: usize) -> Self {
         Self {
             ep_in,
-            log_seq: 0,
+            log_seq: -1,
             tx_buf,
             pending_frame: false,
             timeout_ms_per_frame: DEFAULT_TIMEOUT_MS_PER_FRAME,
@@ -402,7 +402,7 @@ impl<M: RawMutex + 'static, D: Driver<'static> + 'static> WireTx for EUsbWireTx<
             VarKeyKind::Key8 => VarKey::Key8(LoggingTopic::TOPIC_KEY),
         };
         let ctr = *log_seq;
-        *log_seq = log_seq.wrapping_add(1);
+        *log_seq = if ctr == i16::MIN { -1 } else { ctr - 1 };
         let wh = VarHeader {
             key,
             seq_no: VarSeq::Seq2(ctr),
@@ -450,7 +450,7 @@ impl<M: RawMutex + 'static, D: Driver<'static> + 'static> WireTx for EUsbWireTx<
             VarKeyKind::Key8 => VarKey::Key8(LoggingTopic::TOPIC_KEY),
         };
         let ctr = *log_seq;
-        *log_seq = log_seq.wrapping_add(1);
+        *log_seq = if ctr == i16::MIN { -1 } else { ctr - 1 };
         let wh = VarHeader {
             key,
             seq_no: VarSeq::Seq2(ctr),

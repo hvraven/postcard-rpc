@@ -30,10 +30,6 @@ pub(crate) mod embassy_shared {
     use crate::server::WireSpawn;
     use embassy_executor::{SpawnError, SpawnToken, Spawner};
 
-    //////////////////////////////////////////////////////////////////////////////
-    // SPAWN
-    //////////////////////////////////////////////////////////////////////////////
-
     /// A [`WireSpawn`] impl using the embassy executor
     #[derive(Clone)]
     pub struct EmbassyWireSpawn {
